@@ -16,24 +16,30 @@
 
 #Server
 resource "aws_instance" "ngnixserver" {
-  ami                    = "ami-082105f875acab993"
+  ami                    = lookup(var.ami, var.aws_region)
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.main-public-1.id
   key_name               = aws_key_pair.mykeypair.key_name
-  vpc_security_group_ids = [aws_security_group.ec2-sg.id]
+  vpc_security_group_ids = [aws_security_group.ec2-sg.id, aws_security_group.ec2-mainsg.id]
   tags = merge(local.common_tags,
     { Name = "ngnixserver"
   Application = "public" })
-
-  user_data = <<EOF
-   #!/bin/bash
-   sudo yum update -y
-   sudo yum install httpd -y
-   service httpd start
-   chkconfig httpd on
-   export INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
-   echo "<html><body><h1>Hello from Production Web App at instance <b>"$INSTANCE_ID"</b></h1></body></html>" > /var/www/html/index.html
-EOF
+  # user_data = <<EOF
+  # #!/bin/bash
+  # sudo apt-get update
+  # sudo apt-get -y install net-tools nginx
+  # MYIP=`ifconfig | grep -E '(inet 10)|(addr:10)' | awk '{ print $2 }' | cut -d ':' -f2`
+  # echo 'this is: '$MYIP > /var/www/html/index.html'
+  # EOF
+  #   user_data = <<EOF
+  #    #!/bin/bash
+  #    sudo yum update -y
+  #    sudo yum install httpd -y
+  #    service httpd start
+  #    chkconfig httpd on
+  #    export INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
+  #    echo "<html><body><h1>Hello from Production Web App at instance <b>"$INSTANCE_ID"</b></h1></body></html>" > /var/www/html/index.html
+  # EOF
   # connection {
   #   # The default username for our AMI
   #   user        = "ubuntu"
@@ -45,8 +51,30 @@ EOF
   # provisioner "remote-exec" {
   #   inline = [
   #     "sudo apt-get -y update",
+  #     "sudo apt install default-jre -y",
+  #     "sudo apt install default-jdk -y",
+  #     "wget -q -O - https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo apt-key add -",
+  #     "sudo sh -c 'echo deb http://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'",
+  #     "sudo apt-get update -y",
+  #     "sudo apt install jenkins -y",
+  #     "sudo systemctl start jenkins",
+  #     "sudo systemctl status jenkins",
+  #   ]
+  # # }
+  #   connection {
+  #   # The default username for our AMI
+  #   user        = "ubuntu"
+  #   host        = self.public_ip
+  #   type        = "ssh"
+  #   private_key = file(var.path)
+  # }
+
+  # provisioner "remote-exec" {
+  #   inline = [
+  #     "sudo apt-get -y update",
   #     "sudo apt install nginx -y",
-  #    "sudo systemctl start nginx",
+  #     "sudo systemctl start nginx",
+  #     "sudo systemctl status nginx",
   #   ]
   # }
 }
@@ -69,6 +97,7 @@ resource "aws_lb" "ngnixlb" {
     { Name = "ngnixserver"
   Application = "public" })
 }
+///ALB-HLTH CHCK
 resource "aws_lb_target_group" "ngnixapp_tglb" {
   name     = join("-", [local.application.app_name, "ngnixapptglb"])
   port     = 443
@@ -86,16 +115,10 @@ resource "aws_lb_target_group" "ngnixapp_tglb" {
     matcher             = "200"
   }
 }
-
 resource "aws_lb_target_group_attachment" "ngnixapp_tglbat" {
   target_group_arn = aws_lb_target_group.ngnixapp_tglb.arn
   target_id        = aws_instance.ngnixserver.id
   port             = 443
-}
-resource "aws_lb_target_group_attachment" "ngnixapp_tglb2" {
-  target_group_arn = aws_lb_target_group.ngnixapp_tglb.arn
-  target_id        = aws_instance.ngnixserver.id
-  port             = 80
 }
 resource "aws_lb_listener" "ngnixapp_lblist2" {
   load_balancer_arn = aws_lb.ngnixlb.arn
@@ -185,10 +208,6 @@ resource "aws_iam_role" "ngnix_role" {
   Role = "ngnixrole" })
 }
 
-# resource "aws_iam_instance_profile" "ngnix_profile" {
-#   name = join("-", [local.application.app_name, "ngnixprofile"])
-#   role = aws_iam_role.ngnix_role.name
-# }
 resource "aws_iam_role_policy" "ngnix_policy" {
   name = join("-", [local.application.app_name, "ngnixpolicy"])
   role = aws_iam_role.ngnix_role.id
@@ -252,7 +271,7 @@ resource "aws_acm_certificate_validation" "ngnixcert" {
 ##Alias record
 resource "aws_route53_record" "www" {
   zone_id = data.aws_route53_zone.main-zone.zone_id
-  name    = "dummyapp.elietesolutionsit.de"
+  name    = "test.elietesolutionsit.de"
   type    = "A"
 
   alias {

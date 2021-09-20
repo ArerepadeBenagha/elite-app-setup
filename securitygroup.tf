@@ -10,12 +10,17 @@ resource "aws_security_group" "ec2-sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.main-alb.id]
   }
-
   ingress {
     from_port       = 443
     to_port         = 443
@@ -53,4 +58,32 @@ resource "aws_security_group" "main-alb" {
   }
   tags = merge(local.common_tags,
   { Name = "Alb security group" })
+}
+#EC2-Main-SG
+resource "aws_security_group" "ec2-mainsg" {
+  vpc_id      = aws_vpc.main.id
+  name        = "EC2 public sg allow"
+  description = "security group for EC2 main SG"
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = merge(local.common_tags,
+  { Name = "EC2 Main security group" })
 }
