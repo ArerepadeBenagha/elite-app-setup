@@ -1,40 +1,36 @@
-resource "aws_security_group" "main_sg" {
+#EC2-SG
+resource "aws_security_group" "ec2-sg" {
   vpc_id      = aws_vpc.main.id
-  name        = "allow-ssh"
-  description = "security group that allows ssh and all egress traffic"
+  name        = "public web ngnix sg"
+  description = "security group Ec2-server"
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.main-alb.id]
+  }
 
   ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.main-alb.id]
   }
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = {
-    Name = "example-instance"
-  }
+  tags = merge(local.common_tags,
+  { Name = "Ec2 security group" })
 }
-resource "aws_security_group" "main_sgweb" {
+
+#ALB-SG
+resource "aws_security_group" "main-alb" {
   vpc_id      = aws_vpc.main.id
   name        = "public web allow"
-  description = "security group that allows ssh and all egress traffic"
+  description = "security group for ALB"
   egress {
     from_port   = 0
     to_port     = 0
@@ -55,7 +51,6 @@ resource "aws_security_group" "main_sgweb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = {
-    Name = "public_web"
-  }
+  tags = merge(local.common_tags,
+  { Name = "Alb security group" })
 }

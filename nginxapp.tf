@@ -1,46 +1,54 @@
-data "aws_ami" "ubuntu" {
-  most_recent = true
+# data "aws_ami" "ubuntu" {
+#   most_recent = true
 
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
-  }
+#   filter {
+#     name   = "name"
+#     values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
+#   }
 
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
+#   filter {
+#     name   = "virtualization-type"
+#     values = ["hvm"]
+#   }
 
-  owners = ["099720109477"] # Canonical
-}
+#   owners = ["099720109477"] # Canonical
+# }
 
 #Server
 resource "aws_instance" "ngnixserver" {
-  ami                    = data.aws_ami.ubuntu.id
+  ami                    = "ami-082105f875acab993"
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.main-public-1.id
   key_name               = aws_key_pair.mykeypair.key_name
-  vpc_security_group_ids = [aws_security_group.main_sg.id]
+  vpc_security_group_ids = [aws_security_group.ec2-sg.id]
   tags = merge(local.common_tags,
     { Name = "ngnixserver"
   Application = "public" })
 
-  # user_data = file("scripts/userdata.sh")
-  connection {
-    # The default username for our AMI
-    user        = "ubuntu"
-    host        = self.public_ip
-    type        = "ssh"
-    private_key = file(var.path)
-  }
+  user_data = <<EOF
+   #!/bin/bash
+   sudo yum update -y
+   sudo yum install httpd -y
+   service httpd start
+   chkconfig httpd on
+   export INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
+   echo "<html><body><h1>Hello from Production Web App at instance <b>"$INSTANCE_ID"</b></h1></body></html>" > /var/www/html/index.html
+EOF
+  # connection {
+  #   # The default username for our AMI
+  #   user        = "ubuntu"
+  #   host        = self.public_ip
+  #   type        = "ssh"
+  #   private_key = file(var.path)
+  # }
 
-  provisioner "remote-exec" {
-    inline = [
-      "sudo apt-get -y update",
-      "sudo apt install apache2 -y",
-      "sudo systemctl start apache2",
-    ]
-  }
+  # provisioner "remote-exec" {
+  #   inline = [
+  #     "sudo apt-get -y update",
+  #     "sudo apt install nginx -y",
+  #    "sudo systemctl start nginx",
+  #   ]
+  # }
 }
 
 #LB
@@ -48,7 +56,7 @@ resource "aws_lb" "ngnixlb" {
   name               = join("-", [local.application.app_name, "ngnixlb"])
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.main_sg.id, aws_security_group.main_sgweb.id]
+  security_groups    = [aws_security_group.main-alb.id]
   subnets            = [aws_subnet.main-public-1.id, aws_subnet.main-public-2.id]
   idle_timeout       = "60"
 
@@ -68,7 +76,7 @@ resource "aws_lb_target_group" "ngnixapp_tglb" {
   vpc_id   = aws_vpc.main.id
 
   health_check {
-    path                = "/orders/index.hmtl"
+    path                = "/"
     port                = "traffic-port"
     protocol            = "HTTPS"
     healthy_threshold   = "5"
@@ -84,13 +92,17 @@ resource "aws_lb_target_group_attachment" "ngnixapp_tglbat" {
   target_id        = aws_instance.ngnixserver.id
   port             = 443
 }
-
+resource "aws_lb_target_group_attachment" "ngnixapp_tglb2" {
+  target_group_arn = aws_lb_target_group.ngnixapp_tglb.arn
+  target_id        = aws_instance.ngnixserver.id
+  port             = 80
+}
 resource "aws_lb_listener" "ngnixapp_lblist2" {
   load_balancer_arn = aws_lb.ngnixlb.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = "arn:aws:acm:ap-southeast-1:901445516958:certificate/7c0124eb-0703-42dd-b1e8-54de2d83ad3a"
+  certificate_arn   = "arn:aws:acm:ap-southeast-1:901445516958:certificate/5ddfcabb-1e7e-48f0-a297-62a048e207ae"
 
   default_action {
     type             = "forward"
@@ -173,10 +185,10 @@ resource "aws_iam_role" "ngnix_role" {
   Role = "ngnixrole" })
 }
 
-resource "aws_iam_instance_profile" "ngnix_profile" {
-  name = join("-", [local.application.app_name, "ngnixprofile"])
-  role = aws_iam_role.ngnix_role.name
-}
+# resource "aws_iam_instance_profile" "ngnix_profile" {
+#   name = join("-", [local.application.app_name, "ngnixprofile"])
+#   role = aws_iam_role.ngnix_role.name
+# }
 resource "aws_iam_role_policy" "ngnix_policy" {
   name = join("-", [local.application.app_name, "ngnixpolicy"])
   role = aws_iam_role.ngnix_role.id
@@ -199,10 +211,8 @@ resource "aws_iam_role_policy" "ngnix_policy" {
 
 #Cert
 resource "aws_acm_certificate" "ngnixcert" {
-  domain_name       = "elietesolutionsit.de"
+  domain_name       = "*.elietesolutionsit.de"
   validation_method = "DNS"
-
-
   lifecycle {
     create_before_destroy = true
   }
@@ -211,7 +221,7 @@ resource "aws_acm_certificate" "ngnixcert" {
   Cert = "ngnixcert" })
 }
 
-##Cert Validation
+# ##Cert Validation
 data "aws_route53_zone" "main-zone" {
   name         = "elietesolutionsit.de"
   private_zone = false
@@ -237,4 +247,17 @@ resource "aws_route53_record" "ngnixzone_record" {
 resource "aws_acm_certificate_validation" "ngnixcert" {
   certificate_arn         = aws_acm_certificate.ngnixcert.arn
   validation_record_fqdns = [for record in aws_route53_record.ngnixzone_record : record.fqdn]
+}
+
+##Alias record
+resource "aws_route53_record" "www" {
+  zone_id = data.aws_route53_zone.main-zone.zone_id
+  name    = "dummyapp.elietesolutionsit.de"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.ngnixlb.dns_name
+    zone_id                = aws_lb.ngnixlb.zone_id
+    evaluate_target_health = true
+  }
 }
