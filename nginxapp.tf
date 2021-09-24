@@ -1,36 +1,12 @@
-# data "aws_ami" "ubuntu" {
-#   most_recent = true
-
-#   filter {
-#     name   = "name"
-#     values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
-#   }
-
-#   filter {
-#     name   = "virtualization-type"
-#     values = ["hvm"]
-#   }
-
-#   owners = ["099720109477"] # Canonical
-# }
-
 #Server
 resource "aws_instance" "ngnixserver" {
-  ami                    = lookup(var.ami, var.aws_region)
+  # ami                    = lookup(var.ami, var.aws_region)
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.main-public-1.id
   key_name               = aws_key_pair.mykeypair.key_name
-  vpc_security_group_ids = [aws_security_group.ec2-sg.id, aws_security_group.ec2-mainsg.id]
-  tags = merge(local.common_tags,
-    { Name = "ngnixserver"
-  Application = "public" })
+  vpc_security_group_ids = [aws_security_group.ec2-sg.id]
   # user_data = <<EOF
-  # #!/bin/bash
-  # sudo apt-get update
-  # sudo apt-get -y install net-tools nginx
-  # MYIP=`ifconfig | grep -E '(inet 10)|(addr:10)' | awk '{ print $2 }' | cut -d ':' -f2`
-  # echo 'this is: '$MYIP > /var/www/html/index.html'
-  # EOF
   #   user_data = <<EOF
   #    #!/bin/bash
   #    sudo yum update -y
@@ -61,25 +37,26 @@ resource "aws_instance" "ngnixserver" {
   #     "sudo systemctl status jenkins",
   #   ]
   # # }
-  #   connection {
-  #   # The default username for our AMI
-  #   user        = "ubuntu"
-  #   host        = self.public_ip
-  #   type        = "ssh"
-  #   private_key = file(var.path)
-  # }
-
-  # provisioner "remote-exec" {
-  #   inline = [
-  #     "sudo apt-get -y update",
-  #     "sudo apt install nginx -y",
-  #     "sudo systemctl start nginx",
-  #     "sudo systemctl status nginx",
-  #   ]
-  # }
+  connection {
+    # The default username for our AMI
+    user        = "ubuntu"
+    host        = self.public_ip
+    type        = "ssh"
+    private_key = file(var.path)
+  }
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt-get -y update",
+      "sudo apt install nginx -y",
+      "sudo systemctl start nginx",
+    ]
+  }
+  tags = merge(local.common_tags,
+    { Name = "ngnixserver"
+  Application = "public" })
 }
 
-#LB
+# LB
 resource "aws_lb" "ngnixlb" {
   name               = join("-", [local.application.app_name, "ngnixlb"])
   internal           = false
@@ -125,15 +102,14 @@ resource "aws_lb_listener" "ngnixapp_lblist2" {
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = "arn:aws:acm:ap-southeast-1:901445516958:certificate/5ddfcabb-1e7e-48f0-a297-62a048e207ae"
-
+  certificate_arn   = "arn:aws:acm:ap-southeast-1:901445516958:certificate/25bf0064-6dcc-4ae1-bc04-f337c9a583c8"
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.ngnixapp_tglb.arn
   }
 }
 
-resource "aws_lb_listener" "ngnixapp_lblist1" {
+resource "aws_lb_listener" "ngnixapp_lblist" {
   load_balancer_arn = aws_lb.ngnixlb.arn
   port              = "80"
   protocol          = "HTTP"
@@ -147,6 +123,7 @@ resource "aws_lb_listener" "ngnixapp_lblist1" {
     }
   }
 }
+
 resource "aws_s3_bucket" "logs_s3" {
   bucket = join("-", [local.application.app_name, "logss3"])
   acl    = "private"
@@ -271,7 +248,7 @@ resource "aws_acm_certificate_validation" "ngnixcert" {
 ##Alias record
 resource "aws_route53_record" "www" {
   zone_id = data.aws_route53_zone.main-zone.zone_id
-  name    = "test.elietesolutionsit.de"
+  name    = "testapp.elietesolutionsit.de"
   type    = "A"
 
   alias {

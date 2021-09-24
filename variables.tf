@@ -15,7 +15,7 @@ variable "path_to_private_key" {
 variable "ami" {
   type = map(any)
   default = {
-    ap-southeast-1 = "ami-0d058fe428540cd89"
+    ap-southeast-1 = "ami-082105f875acab993"
   }
 }
 variable "instance_type" {
