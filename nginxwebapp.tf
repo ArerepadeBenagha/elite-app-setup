@@ -1,4 +1,4 @@
-#Server
+###########------ Nginx Server -----########
 resource "aws_instance" "httpdserver" {
   ami                    = lookup(var.ami, var.aws_region)
   # ami                    = data.aws_ami.ubuntu.id
@@ -27,7 +27,7 @@ resource "aws_instance" "httpdserver" {
   Application = "public" })
 }
 
-##LB
+###-------- ALB -------###
 resource "aws_lb" "httpdlb" {
   name               = join("-", [local.application.app_name, "httpdlb"])
   internal           = false
@@ -45,7 +45,7 @@ resource "aws_lb" "httpdlb" {
     { Name = "httpdserver"
   Application = "public" })
 }
-///ALB-HLTH CHCK
+###------- ALB Health Check -------###
 resource "aws_lb_target_group" "httpdapp_tglb" {
   name     = join("-", [local.application.app_name, "httpdapptglb"])
   port     = 80
@@ -69,7 +69,7 @@ resource "aws_lb_target_group_attachment" "httpdapp_tglbat" {
   target_id        = aws_instance.httpdserver.id
   port             = 80
 }
-
+#####-------- SSL Cert ------#####
 resource "aws_lb_listener" "httpdapp_lblist2" {
   load_balancer_arn = aws_lb.httpdlb.arn
   port              = "443"
@@ -81,7 +81,7 @@ resource "aws_lb_listener" "httpdapp_lblist2" {
     target_group_arn = aws_lb_target_group.httpdapp_tglb.arn
   }
 }
-
+####---- Redirect Rule -----####
 resource "aws_lb_listener" "httpdapp_lblist" {
   load_balancer_arn = aws_lb.httpdlb.arn
   port              = "80"
@@ -97,6 +97,7 @@ resource "aws_lb_listener" "httpdapp_lblist" {
   }
 }
 
+########------- S3 Bucket -----------####
 resource "aws_s3_bucket" "logs_s3" {
   bucket = join("-", [local.application.app_name, "logss3"])
   acl    = "private"
@@ -108,8 +109,6 @@ resource "aws_s3_bucket" "logs_s3" {
 resource "aws_s3_bucket_policy" "logs_s3" {
   bucket = aws_s3_bucket.logs_s3.id
 
-  # Terraform's "jsonencode" function converts a
-  # Terraform expression's result to valid JSON syntax.
   policy = jsonencode({
     Version = "2012-10-17"
     Id      = "MYBUCKETPOLICY"
@@ -137,8 +136,6 @@ resource "aws_s3_bucket_policy" "logs_s3" {
 resource "aws_iam_role" "httpd_role" {
   name = join("-", [local.application.app_name, "httpdrole"])
 
-  # Terraform's "jsonencode" function converts a
-  # Terraform expression result to valid JSON syntax.
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -158,12 +155,11 @@ resource "aws_iam_role" "httpd_role" {
   Role = "httpdrole" })
 }
 
+#######------- IAM Role ------######
 resource "aws_iam_role_policy" "httpd_policy" {
   name = join("-", [local.application.app_name, "httpdpolicy"])
   role = aws_iam_role.httpd_role.id
 
-  # Terraform's "jsonencode" function converts a
-  # Terraform expression result to valid JSON syntax.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -178,7 +174,7 @@ resource "aws_iam_role_policy" "httpd_policy" {
   })
 }
 
-#Cert
+#####------ Certificate -----------####
 resource "aws_acm_certificate" "httpdcert" {
   domain_name       = "*.elietesolutionsit.de"
   validation_method = "DNS"
@@ -190,7 +186,7 @@ resource "aws_acm_certificate" "httpdcert" {
   Cert = "httpdcert" })
 }
 
-# ##Cert Validation
+###------- Cert Validation -------###
 data "aws_route53_zone" "main-zone" {
   name         = "elietesolutionsit.de"
   private_zone = false
@@ -218,7 +214,7 @@ resource "aws_acm_certificate_validation" "httpdcert" {
   validation_record_fqdns = [for record in aws_route53_record.httpdzone_record : record.fqdn]
 }
 
-##Alias record
+##------- ALB Alias record ----------##
 resource "aws_route53_record" "www" {
   zone_id = data.aws_route53_zone.main-zone.zone_id
   name    = "registration-app.elietesolutionsit.de"
