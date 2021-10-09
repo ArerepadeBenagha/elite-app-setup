@@ -1,5 +1,5 @@
 ###########------ Nginx Server -----########
-resource "aws_instance" "httpdserver" {
+resource "aws_instance" "nginxserver" {
   ami = lookup(var.ami, var.aws_region)
   # ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
@@ -23,13 +23,13 @@ resource "aws_instance" "httpdserver" {
     ]
   }
   tags = merge(local.common_tags,
-    { Name = "apacheserver"
+    { Name = "nginx-server"
   Application = "public" })
 }
 
 ###-------- ALB -------###
-resource "aws_lb" "httpdlb" {
-  name               = join("-", [local.application.app_name, "httpdlb"])
+resource "aws_lb" "nginxlb" {
+  name               = join("-", [local.application.app_name, "nginxlb"])
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.main-alb.id]
@@ -38,16 +38,16 @@ resource "aws_lb" "httpdlb" {
 
   access_logs {
     bucket  = aws_s3_bucket.logs_s3.bucket
-    prefix  = join("-", [local.application.app_name, "httpdlb-s3logs"])
+    prefix  = join("-", [local.application.app_name, "nginxlb-s3logs"])
     enabled = true
   }
   tags = merge(local.common_tags,
-    { Name = "httpdserver"
+    { Name = "nginxserver"
   Application = "public" })
 }
 ###------- ALB Health Check -------###
-resource "aws_lb_target_group" "httpdapp_tglb" {
-  name     = join("-", [local.application.app_name, "httpdapptglb"])
+resource "aws_lb_target_group" "nginxapp_tglb" {
+  name     = join("-", [local.application.app_name, "nginxapptglb"])
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -64,26 +64,26 @@ resource "aws_lb_target_group" "httpdapp_tglb" {
   }
 }
 
-resource "aws_lb_target_group_attachment" "httpdapp_tglbat" {
-  target_group_arn = aws_lb_target_group.httpdapp_tglb.arn
-  target_id        = aws_instance.httpdserver.id
+resource "aws_lb_target_group_attachment" "nginxapp_tglbat" {
+  target_group_arn = aws_lb_target_group.nginxapp_tglb.arn
+  target_id        = aws_instance.nginxserver.id
   port             = 80
 }
 #####-------- SSL Cert ------#####
-resource "aws_lb_listener" "httpdapp_lblist2" {
-  load_balancer_arn = aws_lb.httpdlb.arn
+resource "aws_lb_listener" "nginxapp_lblist2" {
+  load_balancer_arn = aws_lb.nginxlb.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
   certificate_arn   = "arn:aws:acm:ap-southeast-1:901445516958:certificate/221fff07-f36c-4944-94ef-760d4925c40e"
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.httpdapp_tglb.arn
+    target_group_arn = aws_lb_target_group.nginxapp_tglb.arn
   }
 }
 ####---- Redirect Rule -----####
-resource "aws_lb_listener" "httpdapp_lblist" {
-  load_balancer_arn = aws_lb.httpdlb.arn
+resource "aws_lb_listener" "nginxapp_lblist" {
+  load_balancer_arn = aws_lb.nginxlb.arn
   port              = "80"
   protocol          = "HTTP"
 
@@ -103,7 +103,7 @@ resource "aws_s3_bucket" "logs_s3" {
   acl    = "private"
 
   tags = merge(local.common_tags,
-    { Name = "httpdserver"
+    { Name = "nginxserver"
   bucket = "private" })
 }
 resource "aws_s3_bucket_policy" "logs_s3" {
@@ -133,8 +133,8 @@ resource "aws_s3_bucket_policy" "logs_s3" {
 }
 
 #IAM
-resource "aws_iam_role" "httpd_role" {
-  name = join("-", [local.application.app_name, "httpdrole"])
+resource "aws_iam_role" "nginx_role" {
+  name = join("-", [local.application.app_name, "nginxrole"])
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -151,14 +151,14 @@ resource "aws_iam_role" "httpd_role" {
   })
 
   tags = merge(local.common_tags,
-    { Name = "httpdserver"
-  Role = "httpdrole" })
+    { Name = "nginxserver"
+  Role = "nginxrole" })
 }
 
 #######------- IAM Role ------######
-resource "aws_iam_role_policy" "httpd_policy" {
-  name = join("-", [local.application.app_name, "httpdpolicy"])
-  role = aws_iam_role.httpd_role.id
+resource "aws_iam_role_policy" "nginx_policy" {
+  name = join("-", [local.application.app_name, "nginxpolicy"])
+  role = aws_iam_role.nginx_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -175,7 +175,7 @@ resource "aws_iam_role_policy" "httpd_policy" {
 }
 
 #####------ Certificate -----------####
-resource "aws_acm_certificate" "httpdcert" {
+resource "aws_acm_certificate" "nginxcert" {
   domain_name       = "*.elietesolutionsit.de"
   validation_method = "DNS"
   lifecycle {
@@ -183,7 +183,7 @@ resource "aws_acm_certificate" "httpdcert" {
   }
   tags = merge(local.common_tags,
     { Name = "registration-app.elietesolutionsit.de"
-  Cert = "httpdcert" })
+  Cert = "nginxcert" })
 }
 
 ###------- Cert Validation -------###
@@ -192,9 +192,9 @@ data "aws_route53_zone" "main-zone" {
   private_zone = false
 }
 
-resource "aws_route53_record" "httpdzone_record" {
+resource "aws_route53_record" "nginxzone_record" {
   for_each = {
-    for dvo in aws_acm_certificate.httpdcert.domain_validation_options : dvo.domain_name => {
+    for dvo in aws_acm_certificate.nginxcert.domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
@@ -209,9 +209,9 @@ resource "aws_route53_record" "httpdzone_record" {
   zone_id         = data.aws_route53_zone.main-zone.zone_id
 }
 
-resource "aws_acm_certificate_validation" "httpdcert" {
-  certificate_arn         = aws_acm_certificate.httpdcert.arn
-  validation_record_fqdns = [for record in aws_route53_record.httpdzone_record : record.fqdn]
+resource "aws_acm_certificate_validation" "nginxcert" {
+  certificate_arn         = aws_acm_certificate.nginxcert.arn
+  validation_record_fqdns = [for record in aws_route53_record.nginxzone_record : record.fqdn]
 }
 
 ##------- ALB Alias record ----------##
@@ -221,8 +221,8 @@ resource "aws_route53_record" "www" {
   type    = "A"
 
   alias {
-    name                   = aws_lb.httpdlb.dns_name
-    zone_id                = aws_lb.httpdlb.zone_id
+    name                   = aws_lb.nginxlb.dns_name
+    zone_id                = aws_lb.nginxlb.zone_id
     evaluate_target_health = true
   }
 }
