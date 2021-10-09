@@ -8,14 +8,14 @@ variable "path_to_public_key" {
   default     = "ngnixkey.pub"
 }
 
-variable "path_to_private_key" {
-  description = "private key"
-  default     = "ngnixkey"
-}
+# variable "path_to_private_key" {
+#   description = "private key"
+#   default     = "ngnixkey"
+# }
 variable "ami" {
   type = map(any)
   default = {
-    ap-southeast-1 = "ami-082105f875acab993"
+    ap-southeast-1 = "ami-055147723b7bca09a" #"ami-0f8f259f2d445ee0e"
   }
 }
 variable "instance_type" {
