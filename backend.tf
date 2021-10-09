@@ -2,10 +2,13 @@
 resource "aws_s3_bucket" "b" {
   bucket = join("-", [local.application.ec2, "regappbucket"])
   acl    = "private"
-
+  versioning {
+    enabled = true
+  }
   tags = merge(local.common_tags,
   { Name = "Dev webapp bucket" })
 }
+
 
 ####------- remote state file --------####
 terraform {
