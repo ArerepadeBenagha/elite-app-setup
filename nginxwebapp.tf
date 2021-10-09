@@ -1,12 +1,12 @@
 ###########------ Nginx Server -----########
 resource "aws_instance" "httpdserver" {
-  ami                    = lookup(var.ami, var.aws_region)
+  ami = lookup(var.ami, var.aws_region)
   # ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.main-public-1.id
   key_name               = aws_key_pair.mykeypair.key_name
   vpc_security_group_ids = [aws_security_group.ec2-sg.id]
-  
+
   connection {
     # The default username for our AMI
     user        = "ubuntu"
