@@ -41,7 +41,7 @@ resource "aws_cloudwatch_dashboard" "main" {
 EOF
 }
 
-####----- Log group destination --------#####
+####----- Log group destination -------####
 resource "aws_cloudwatch_log_group" "registrationwebapp" {
   name = "registrationwebapp"
 
