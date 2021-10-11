@@ -3,9 +3,9 @@ resource "aws_instance" "nginxserver" {
   ami = lookup(var.ami, var.aws_region)
   # ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
-  subnet_id              = aws_subnet.main-public-1.id
+  subnet_id              = data.aws_subnet.bastion-subnet.id
   key_name               = aws_key_pair.mykeypair.key_name
-  vpc_security_group_ids = [aws_security_group.ec2-sg.id]
+  vpc_security_group_ids = [data.aws_security_group.bastion-sg.id]
 
   connection {
     # The default username for our AMI
@@ -14,26 +14,26 @@ resource "aws_instance" "nginxserver" {
     type        = "ssh"
     private_key = file(var.path)
   }
-  provisioner "remote-exec" {
-    inline = [
-      "sudo apt-get -y update",
-      "sudo apt install nginx -y",
-      # "sudo apt install apache2 -y",
-      # "sudo systemctl start apache2",
-    ]
-  }
+  # provisioner "remote-exec" {
+  #   inline = [
+  #     "sudo apt-get -y update",
+  #     "sudo apt install nginx -y",
+  #     # "sudo apt install apache2 -y",
+  #     # "sudo systemctl start apache2",
+  #   ]
+  # }
   tags = merge(local.common_tags,
     { Name = "nginx-server"
   Application = "public" })
 }
 
-###-------- ALB -------###
+# ###-------- ALB -------###
 resource "aws_lb" "nginxlb" {
   name               = join("-", [local.application.app_name, "nginxlb"])
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.main-alb.id]
-  subnets            = [aws_subnet.main-public-1.id, aws_subnet.main-public-2.id]
+  security_groups    = [data.aws_security_group.alb-sg.id]
+  subnets            = [data.aws_subnet.alb-public-1.id, data.aws_subnet.alb-public-2.id]
   idle_timeout       = "60"
 
   access_logs {
@@ -50,7 +50,7 @@ resource "aws_lb_target_group" "nginxapp_tglb" {
   name     = join("-", [local.application.app_name, "nginxapptglb"])
   port     = 80
   protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  vpc_id   = data.aws_vpc.vpc-stack.id
 
   health_check {
     path                = "/"
@@ -69,18 +69,20 @@ resource "aws_lb_target_group_attachment" "nginxapp_tglbat" {
   target_id        = aws_instance.nginxserver.id
   port             = 80
 }
-#####-------- SSL Cert ------#####
+
+####-------- SSL Cert ------#####
 resource "aws_lb_listener" "nginxapp_lblist2" {
   load_balancer_arn = aws_lb.nginxlb.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = "arn:aws:acm:ap-southeast-1:901445516958:certificate/221fff07-f36c-4944-94ef-760d4925c40e"
+  certificate_arn   = "arn:aws:acm:ap-southeast-1:901445516958:certificate/a7255895-c867-4284-b537-43c90077efca"
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.nginxapp_tglb.arn
   }
 }
+
 ####---- Redirect Rule -----####
 resource "aws_lb_listener" "nginxapp_lblist" {
   load_balancer_arn = aws_lb.nginxlb.arn
