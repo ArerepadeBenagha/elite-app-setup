@@ -37,7 +37,7 @@ resource "aws_lb" "nginxlb" {
   idle_timeout       = "60"
 
   access_logs {
-    bucket  = aws_s3_bucket.logs_s3.bucket
+    bucket  = aws_s3_bucket.logs_s3dev.bucket
     prefix  = join("-", [local.application.app_name, "nginxlb-s3logs"])
     enabled = true
   }
@@ -45,6 +45,13 @@ resource "aws_lb" "nginxlb" {
     { Name = "nginxserver"
   Application = "public" })
 }
+
+///////////////
+resource "aws_wafv2_web_acl_association" "example" {
+  resource_arn = aws_lb.nginxlb.arn
+  web_acl_arn  = aws_wafv2_web_acl.test.arn
+}
+
 ###------- ALB Health Check -------###
 resource "aws_lb_target_group" "nginxapp_tglb" {
   name     = join("-", [local.application.app_name, "nginxapptglb"])
@@ -69,13 +76,14 @@ resource "aws_lb_target_group_attachment" "nginxapp_tglbat" {
   target_id        = aws_instance.nginxserver.id
   port             = 80
 }
-#####-------- SSL Cert ------#####
+
+####-------- SSL Cert ------#####
 resource "aws_lb_listener" "nginxapp_lblist2" {
   load_balancer_arn = aws_lb.nginxlb.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = "arn:aws:acm:ap-southeast-1:901445516958:certificate/425cb7ca-1d75-4974-8f46-94d63584507b"
+  certificate_arn   = "arn:aws:acm:us-east-1:901445516958:certificate/38e7fca6-b2fb-43ab-b31f-cbb47459a2f4"
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.nginxapp_tglb.arn
@@ -98,16 +106,16 @@ resource "aws_lb_listener" "nginxapp_lblist" {
 }
 
 ########------- S3 Bucket -----------####
-resource "aws_s3_bucket" "logs_s3" {
-  bucket = join("-", [local.application.app_name, "logss3"])
+resource "aws_s3_bucket" "logs_s3dev" {
+  bucket = join("-", [local.application.app_name, "logdev"])
   acl    = "private"
 
   tags = merge(local.common_tags,
     { Name = "nginxserver"
   bucket = "private" })
 }
-resource "aws_s3_bucket_policy" "logs_s3" {
-  bucket = aws_s3_bucket.logs_s3.id
+resource "aws_s3_bucket_policy" "logs_s3dev" {
+  bucket = aws_s3_bucket.logs_s3dev.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -119,8 +127,8 @@ resource "aws_s3_bucket_policy" "logs_s3" {
         Principal = "*"
         Action    = "s3:*"
         Resource = [
-          aws_s3_bucket.logs_s3.arn,
-          "${aws_s3_bucket.logs_s3.arn}/*",
+          aws_s3_bucket.logs_s3dev.arn,
+          "${aws_s3_bucket.logs_s3dev.arn}/*",
         ]
         Condition = {
           NotIpAddress = {

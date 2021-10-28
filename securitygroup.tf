@@ -34,7 +34,7 @@ resource "aws_security_group" "ec2-sg" {
     protocol        = "tcp"
     security_groups = [aws_security_group.main-alb.id]
   }
-    ingress {
+  ingress {
     from_port       = 3000
     to_port         = 3000
     protocol        = "tcp"
@@ -69,7 +69,7 @@ resource "aws_security_group" "main-alb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-    ingress {
+  ingress {
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
