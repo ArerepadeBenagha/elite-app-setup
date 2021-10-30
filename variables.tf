@@ -13,12 +13,12 @@ variable "path_to_public_key" {
 #   description = "private key"
 #   default     = "ngnixkey"
 # }
-variable "ami" {
-  type = map(any)
-  default = {
-    us-east-1 = "ami-09e67e426f25ce0d7" #syndey#"ami-055147723b7bca09a" #"ami-0f8f259f2d445ee0e"
-  }
-}
+# variable "ami" {
+#   type = map(any)
+#   default = {
+#     us-east-1 = "ami-09e67e426f25ce0d7" #syndey#"ami-055147723b7bca09a" #"ami-0f8f259f2d445ee0e"
+#   }
+# }
 variable "instance_type" {
   default = "t2.micro"
 }

@@ -1,7 +1,6 @@
 ###########------ Nginx Server -----########
 resource "aws_instance" "nginxserver" {
-  ami = lookup(var.ami, var.aws_region)
-  # ami                    = data.aws_ami.ubuntu.id
+  ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.main-public-1.id
   key_name               = aws_key_pair.mykeypair.key_name
